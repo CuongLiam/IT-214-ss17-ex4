@@ -1,0 +1,16 @@
+=== KẾT QUẢ KIỂM THỬ CACHE STAMPEDE (DÙNG ĐỂ NỘP BÀI) ===
+
+1. CẤU HÌNH @Cacheable:
+- Giá trị: @Cacheable(value = "flash-sale", key = "#id", sync = true)
+- Thuộc tính sync = true chỉ định Spring khóa method lại đối với key này trong khi nó đang được tính toán, chỉ cho phép 1 luồng đi qua (vào DB) khi cache trống.
+
+2. KẾT QUẢ LOG (Sau khi chạy 50 requests đồng thời qua CompletableFuture):
+=== BẮT ĐẦU KIỂM THỬ CACHE STAMPEDE (50 REQUESTS ĐỒNG THỜI) ===
+Fetching from Database for product 1
+=== KẾT THÚC KIỂM THỬ ===
+Tổng thời gian hoàn thành 50 request: ~2015 ms
+
+3. PHÂN TÍCH:
+- Dù có 50 request cùng gọi vào phương thức getProduct(1) đồng thời, hệ thống chỉ in ra DUY NHẤT một dòng log "Fetching from Database for product 1".
+- Tổng thời gian hoàn thành cho cả 50 request chỉ tốn khoảng 2000ms (bằng đúng thời gian tái tạo cache ban đầu) chứ không phải bị tắc nghẽn tạo ra 50 x 2 giây hay làm treo DB.
+- Các request (từ 2 đến 50) đã bị block (chờ) tại tầng Cache. Ngay khi luồng 1 lấy xong dữ liệu từ DB và cập nhật Cache, 49 luồng còn lại lập tức rút dữ liệu từ Cache ra trả về mà không hề chạm tới Database. => Tránh hoàn toàn lỗi Cache Stampede (Bão truy vấn đồng thời).
